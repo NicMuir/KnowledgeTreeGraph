@@ -1,0 +1,10 @@
+export { indexRepository, createIndexingRun, runIndexing } from './indexer';
+export { scanDirectory } from './scanner';
+export { chunkFile, chunkMarkdown, chunkCode, chunkGeneric } from './chunkers';
+export { hashContent } from './hasher';
+export { detectLanguage, detectChunkType } from './detector';
+export { buildCallGraph, buildCodeTree } from './callgraph';
+export { linkCrossService } from './crosslink';
+export type { ParsedChunk, FileInfo } from './types';
+export type { IndexOptions } from './indexer';
+export type { CallGraph, CallGraphNode, CallGraphEdge, CodeTree, CodeNode, CodeEdge } from './callgraph';

@@ -1,0 +1,20 @@
+{
+  "name": "@kb/retrieval",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --test dist/hybrid.test.js"
+  },
+  "dependencies": {
+    "@kb/shared": "workspace:*",
+    "@kb/db": "workspace:*",
+    "@kb/llm": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

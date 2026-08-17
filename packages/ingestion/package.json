@@ -1,0 +1,26 @@
+{
+  "name": "@kb/ingestion",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --test dist/chunkers/*.test.js"
+  },
+  "dependencies": {
+    "@kb/db": "workspace:*",
+    "@kb/llm": "workspace:*",
+    "@kb/shared": "workspace:*",
+    "tiktoken": "^1.0.15",
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-php": "^0.24.2",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}

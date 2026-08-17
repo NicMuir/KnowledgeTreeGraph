@@ -1,0 +1,35 @@
+{
+  "name": "kb",
+  "private": true,
+  "bin": {
+    "kb": "bin/kb.mjs"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "start": "docker compose up -d && turbo dev --filter=@kb/api --filter=@kb/web",
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "db:migrate": "pnpm --filter @kb/db migrate",
+    "db:migrate:dev": "pnpm --filter @kb/db migrate:dev",
+    "db:generate": "pnpm --filter @kb/db generate",
+    "db:studio": "pnpm --filter @kb/db studio",
+    "kb": "ts-node -P scripts/tsconfig.json scripts/cli.ts",
+    "index": "ts-node -P scripts/tsconfig.json scripts/cli.ts index",
+    "index-all": "ts-node -P scripts/tsconfig.json scripts/cli.ts index-all",
+    "chat": "ts-node -P scripts/tsconfig.json scripts/cli.ts ask",
+    "seed": "ts-node -P scripts/tsconfig.json scripts/seed.ts"
+  },
+  "devDependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "@types/node": "^20.0.0",
+    "dotenv": "^16.4.0",
+    "ts-node": "^10.9.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.4.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

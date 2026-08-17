@@ -1,0 +1,121 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model Repository {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  localPath        String
+  remoteUrl        String?
+  branch           String   @default("main")
+  currentCommitSha String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  files        IndexedFile[]
+  chunks       Chunk[]
+  indexingRuns IndexingRun[]
+  symbolNodes  SymbolNode[]
+  symbolEdges  SymbolEdge[]
+
+  @@map("repositories")
+}
+
+model IndexedFile {
+  id        String   @id @default(cuid())
+  repoId    String
+  filePath  String
+  language  String?
+  fileHash  String
+  commitSha String
+  indexedAt DateTime @default(now())
+
+  repo   Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  chunks Chunk[]
+
+  @@unique([repoId, filePath])
+  @@index([repoId])
+  @@index([fileHash])
+  @@map("indexed_files")
+}
+
+/// embedding column is vector(1536) — managed via raw SQL migration, not Prisma schema
+model Chunk {
+  id        String   @id @default(cuid())
+  fileId    String
+  repoId    String
+  filePath  String
+  content   String
+  metadata  Json     @default("{}")
+  startLine Int
+  endLine   Int
+  chunkType String
+  commitSha String
+  indexedAt DateTime @default(now())
+
+  file IndexedFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  repo Repository  @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@index([repoId])
+  @@index([filePath])
+  @@index([chunkType])
+  @@map("chunks")
+}
+
+/// Code tree: route > class > function nodes + contains/calls edges.
+/// id is deterministic: `${repoId}:${filePath}#${name}#${startLine}` — rebuilt per indexing run.
+model SymbolNode {
+  id        String @id
+  repoId    String
+  kind      String // route | class | function | method
+  name      String
+  filePath  String
+  language  String
+  startLine Int
+  endLine   Int
+
+  repo Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@index([repoId, filePath])
+  @@index([repoId, name])
+  @@map("symbol_nodes")
+}
+
+model SymbolEdge {
+  id         String @id @default(cuid())
+  repoId     String
+  fromId     String
+  toId       String
+  kind       String // contains | calls | http_calls
+  confidence Float? // resolution confidence 0..1 (calls: per-strategy; http_calls: per-match-quality)
+
+  repo Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId, kind])
+  @@index([repoId])
+  @@index([toId])
+  @@map("symbol_edges")
+}
+
+model IndexingRun {
+  id           String    @id @default(cuid())
+  repoId       String
+  status       String    @default("running")
+  filesTotal   Int       @default(0)
+  filesIndexed Int       @default(0)
+  error        String?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  repo Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@index([repoId])
+  @@map("indexing_runs")
+}

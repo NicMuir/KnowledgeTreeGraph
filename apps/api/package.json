@@ -1,0 +1,26 @@
+{
+  "name": "@kb/api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only --exit-child src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@kb/db": "workspace:*",
+    "@kb/ingestion": "workspace:*",
+    "@kb/llm": "workspace:*",
+    "@kb/retrieval": "workspace:*",
+    "@kb/shared": "workspace:*",
+    "dotenv": "^16.4.0",
+    "fastify": "^4.28.0",
+    "@fastify/cors": "^9.0.0",
+    "pino": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "ts-node-dev": "^2.0.0"
+  }
+}
