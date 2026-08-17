@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.turbo/
+.next/
+coverage/
+*.tsbuildinfo
+.kb-api.log
+.claude/worktrees/
+snapshots/
+
+# local-only: generated visualizations + paper draft
+map.html
+cross-service-map.html
+paper/
+PAPER-CHECKLIST.md

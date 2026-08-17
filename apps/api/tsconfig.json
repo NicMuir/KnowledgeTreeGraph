@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "paths": {
+      "@kb/shared": ["../../packages/shared/src"],
+      "@kb/db": ["../../packages/db/src"],
+      "@kb/llm": ["../../packages/llm/src"],
+      "@kb/ingestion": ["../../packages/ingestion/src"],
+      "@kb/retrieval": ["../../packages/retrieval/src"]
+    }
+  },
+  "include": ["src"]
+}
