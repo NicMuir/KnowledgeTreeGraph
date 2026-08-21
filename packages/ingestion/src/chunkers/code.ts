@@ -1,4 +1,5 @@
 import type { ParsedChunk } from '../types';
+import type { ChunkType } from '@kb/shared';
 import { MAX_CHUNK_TOKENS, CHUNK_OVERLAP_LINES } from '@kb/shared';
 import { countTokens } from '../tokenizer';
 
@@ -47,11 +48,16 @@ const SYMBOL_PATTERNS: Record<string, RegExp[]> = {
   ],
 };
 
-export function chunkCode(content: string, language: string, _filePath: string): ParsedChunk[] {
+export function chunkCode(
+  content: string,
+  language: string,
+  _filePath: string,
+  forcedType?: ChunkType,
+): ParsedChunk[] {
   const lines = content.split('\n');
   const patterns = SYMBOL_PATTERNS[language] ?? [];
 
-  if (patterns.length === 0) return chunkBySize(lines, language);
+  if (patterns.length === 0) return chunkBySize(lines, language, 0, forcedType);
 
   const imports = extractImports(lines, language);
   const boundaries: number[] = [];
@@ -61,7 +67,7 @@ export function chunkCode(content: string, language: string, _filePath: string):
     if (patterns.some((p) => p.test(trimmed))) boundaries.push(i);
   }
 
-  if (boundaries.length === 0) return chunkBySize(lines, language);
+  if (boundaries.length === 0) return chunkBySize(lines, language, 0, forcedType);
 
   const chunks: ParsedChunk[] = [];
 
@@ -77,15 +83,17 @@ export function chunkCode(content: string, language: string, _filePath: string):
     const chunkContent = [...ctxLines, ...symbolLines].join('\n').trim();
 
     if (countTokens(chunkContent) > MAX_CHUNK_TOKENS) {
-      const subs = chunkBySize(symbolLines, language, start);
+      const subs = chunkBySize(symbolLines, language, start, forcedType);
       chunks.push(...subs.map((c) => ({
         ...c,
         metadata: { ...c.metadata, symbolName, imports: imports.slice(0, 10) },
       })));
     } else {
-      const chunkType = language === 'java' && /class|interface|enum/.test(lines[start])
-        ? 'class' as const
-        : 'function' as const;
+      const chunkType =
+        forcedType ??
+        (language === 'java' && /class|interface|enum/.test(lines[start])
+          ? ('class' as const)
+          : ('function' as const));
       chunks.push({
         content: chunkContent,
         startLine: ctxStart,
@@ -122,7 +130,12 @@ function extractSymbolName(line: string): string | undefined {
   return m?.[1];
 }
 
-function chunkBySize(lines: string[], language: string, lineOffset = 0): ParsedChunk[] {
+function chunkBySize(
+  lines: string[],
+  language: string,
+  lineOffset = 0,
+  forcedType?: ChunkType,
+): ParsedChunk[] {
   const chunks: ParsedChunk[] = [];
   let acc: string[] = [];
   let start = 0;
@@ -136,7 +149,7 @@ function chunkBySize(lines: string[], language: string, lineOffset = 0): ParsedC
           content: text,
           startLine: lineOffset + start,
           endLine: lineOffset + i,
-          chunkType: 'text_block',
+          chunkType: forcedType ?? 'text_block',
           metadata: { language },
         });
       }
@@ -153,7 +166,7 @@ function chunkBySize(lines: string[], language: string, lineOffset = 0): ParsedC
       content: remaining,
       startLine: lineOffset + start,
       endLine: lineOffset + lines.length,
-      chunkType: 'text_block',
+      chunkType: forcedType ?? 'text_block',
       metadata: { language },
     });
   }

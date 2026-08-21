@@ -1,8 +1,18 @@
-import type { FastifyInstance } from 'fastify';
-import { createEmbeddingProvider, createChatProvider } from '@kb/llm';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { createEmbeddingProvider, createChatProvider, LlmUnavailableError } from '@kb/llm';
 import { hybridSearch, expandResults } from '@kb/retrieval';
 import type { ChatRequest } from '@kb/shared';
 import { buildChatPrompt, SYSTEM_PROMPT } from '../prompts/chat';
+
+// Translate a provider failure into a truthful, client-safe error naming the
+// unavailable resource, instead of letting raw SDK/network errors (e.g. Node's
+// ERR_INVALID_URL) leak through as an opaque 500.
+function sendLlmError(reply: FastifyReply, err: unknown): FastifyReply {
+  if (err instanceof LlmUnavailableError) {
+    return reply.status(502).send({ error: 'llm_unavailable', message: err.message });
+  }
+  throw err;
+}
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: ChatRequest }>(
@@ -27,7 +37,12 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       const embedder = createEmbeddingProvider();
       const chatter = createChatProvider();
 
-      const embedding = await embedder.embed(question);
+      let embedding: number[];
+      try {
+        embedding = await embedder.embed(question);
+      } catch (err) {
+        return sendLlmError(reply, err);
+      }
 
       const hits = await hybridSearch(embedding, {
         query: question,
@@ -50,10 +65,15 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const prompt = buildChatPrompt(question, sources);
-      const answer = await chatter.chat([
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
-      ]);
+      let answer: string;
+      try {
+        answer = await chatter.chat([
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ]);
+      } catch (err) {
+        return sendLlmError(reply, err);
+      }
 
       return reply.send({
         answer,

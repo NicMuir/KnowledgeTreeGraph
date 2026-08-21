@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "node --test dist/chunkers/*.test.js"
+    "test": "node --test dist/chunkers/*.test.js dist/*.test.js"
   },
   "dependencies": {
     "@kb/db": "workspace:*",
