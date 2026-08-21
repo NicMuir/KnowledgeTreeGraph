@@ -99,6 +99,19 @@ export async function runIndexing(
       where: { repoId: repo.id, filePath: { notIn: files.map((f) => f.relativePath) } },
     });
 
+    // indexFile() above skips writing a file whose content hash is unchanged, so its
+    // commitSha (and its chunks') is left at whatever commit last modified it — not this
+    // run's HEAD. That's a stale *label*, not stale content: the file was just re-read from
+    // disk at opts.repoPath (checked out at commitSha), so its content is correct for the
+    // current ref regardless of when it last changed. Bulk-restamp every row for this repo
+    // so the whole index reads as one consistent ref after each run, instead of a mix of
+    // whichever commit happened to touch each file last (which can be a commit that only
+    // exists on a since-merged/rebased branch).
+    if (commitSha !== 'unknown') {
+      await prisma.indexedFile.updateMany({ where: { repoId: repo.id }, data: { commitSha } });
+      await prisma.chunk.updateMany({ where: { repoId: repo.id }, data: { commitSha } });
+    }
+
     await persistCodeTree(repo.id, opts.repoPath, files);
     // Link this repo's outbound HTTP calls to routes in other repos (cross-service edges).
     await linkCrossService({ repoId: repo.id });

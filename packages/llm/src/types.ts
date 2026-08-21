@@ -25,3 +25,11 @@ export interface LLMConfig {
   chatModel?: string;
   embeddingDimensions?: number;
 }
+
+/** Thrown when no configured LLM host/model could serve a request — carries a message safe to return to callers. */
+export class LlmUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LlmUnavailableError';
+  }
+}
