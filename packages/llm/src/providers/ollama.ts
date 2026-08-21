@@ -7,6 +7,7 @@
  */
 import OpenAI from 'openai';
 import type { EmbeddingProvider, ChatProvider, ChatMessage, ChatOptions } from '../types';
+import { LlmUnavailableError } from '../types';
 
 interface OllamaConfig {
   baseUrl: string;       // e.g. http://10.30.0.60:11434
@@ -61,32 +62,53 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
           lastErr = err; // try the next host before giving up on this attempt
         }
       }
-      if (attempt >= 3) throw lastErr;
+      if (attempt >= 3) {
+        const reason = lastErr instanceof Error ? lastErr.message : String(lastErr);
+        throw new LlmUnavailableError(
+          `Embedding model "${this.model}" is unavailable on ${this.hosts.length > 1 ? 'any configured Ollama host' : 'the configured Ollama host'} (${this.hosts.join(', ')}): ${reason}`,
+        );
+      }
       await new Promise((r) => setTimeout(r, attempt * 5_000)); // ponytail: fixed 3-try backoff, tune if the box stays flaky
     }
   }
 }
 
 export class OllamaChatProvider implements ChatProvider {
-  private client: OpenAI;
+  private hosts: string[];
+  // One OpenAI client per host, tried in order — mirrors OllamaEmbeddingProvider's
+  // comma-separated OLLAMA_BASE_URL fallback (see .env.example). The OpenAI SDK's
+  // `new URL(baseURL)` call rejects a raw comma-separated string outright
+  // (ERR_INVALID_URL), so each host needs its own client built from a single URL.
+  private clients: OpenAI[];
   readonly model: string;
 
   constructor(config: OllamaConfig) {
+    this.hosts = config.baseUrl.split(',').map((h) => h.trim().replace(/\/$/, '')).filter(Boolean);
     // Ollama's OpenAI-compat chat endpoint
-    this.client = new OpenAI({
-      baseURL: `${config.baseUrl.replace(/\/$/, '')}/v1`,
-      apiKey: 'ollama', // required by SDK, ignored by Ollama
-    });
+    this.clients = this.hosts.map(
+      (host) => new OpenAI({ baseURL: `${host}/v1`, apiKey: 'ollama' /* required by SDK, ignored by Ollama */ }),
+    );
     this.model = config.chatModel;
   }
 
   async chat(messages: ChatMessage[], options: ChatOptions = {}): Promise<string> {
-    const res = await this.client.chat.completions.create({
-      model: this.model,
-      messages,
-      max_tokens: options.maxTokens ?? 2048,
-      temperature: options.temperature ?? 0.1,
-    });
-    return res.choices[0].message.content ?? '';
+    let lastErr: unknown;
+    for (const client of this.clients) {
+      try {
+        const res = await client.chat.completions.create({
+          model: this.model,
+          messages,
+          max_tokens: options.maxTokens ?? 2048,
+          temperature: options.temperature ?? 0.1,
+        });
+        return res.choices[0].message.content ?? '';
+      } catch (err) {
+        lastErr = err; // try the next host before giving up
+      }
+    }
+    const reason = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    throw new LlmUnavailableError(
+      `Chat model "${this.model}" is unavailable on ${this.hosts.length > 1 ? 'any configured Ollama host' : 'the configured Ollama host'} (${this.hosts.join(', ')}): ${reason}`,
+    );
   }
 }
