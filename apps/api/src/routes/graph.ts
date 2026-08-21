@@ -51,12 +51,20 @@ export async function graphRoutes(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       const { symbol, repo, direction = 'out', depth } = req.query;
       if (!symbol) return reply.status(400).send({ error: 'symbol is required' });
-      const startIds = await resolveStartIds(symbol, repo);
-      if (startIds.length === 0) return reply.status(404).send({ error: `No symbol matching "${symbol}"` });
+      const queriedIds = await resolveStartIds(symbol, repo);
+      if (queriedIds.length === 0) return reply.status(404).send({ error: `No symbol matching "${symbol}"` });
 
       // direction out = follow fromId→toId (callees); in = toId→fromId (callers)
       const [fromCol, toCol] = direction === 'in' ? ['toId', 'fromId'] : ['fromId', 'toId'];
-      const rows = await traverse(startIds, clampDepth(depth), ['calls', 'contains'], fromCol, toCol);
+      // Nothing ever points a 'calls'/'contains' edge AT a class node itself (calls target
+      // methods, contains is class→method) — walking "in" from a bare class id always finds
+      // zero edges. Seed with the class's own methods too, so we still recurse into
+      // method-level callers ("who calls this class").
+      const startIds = direction === 'in' ? await expandClassSeeds(queriedIds) : queriedIds;
+      let rows = await traverse(startIds, clampDepth(depth), ['calls', 'contains'], fromCol, toCol);
+      // A class's own "contains" edge to its method can walk straight back to the class
+      // itself — that's structural, not a caller, so drop the symbol(s) we started from.
+      rows = rows.filter((r) => !queriedIds.includes(r.id));
       return reply.send({ symbol, direction, count: rows.length, nodes: rows });
     },
   );
@@ -65,28 +73,77 @@ export async function graphRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Querystring: { symbol: string; repo?: string; depth?: string } }>('/graph/impact', async (req, reply) => {
     const { symbol, repo, depth } = req.query;
     if (!symbol) return reply.status(400).send({ error: 'symbol is required' });
-    const startIds = await resolveStartIds(symbol, repo);
-    if (startIds.length === 0) return reply.status(404).send({ error: `No symbol matching "${symbol}"` });
+    const queriedIds = await resolveStartIds(symbol, repo);
+    if (queriedIds.length === 0) return reply.status(404).send({ error: `No symbol matching "${symbol}"` });
 
-    // reverse reachability: who points AT the target, all edge kinds, across repos
-    const rows = await traverse(startIds, clampDepth(depth), ['calls', 'contains', 'http_calls'], 'toId', 'fromId');
+    // reverse reachability: who points AT the target, all edge kinds, across repos.
+    // Same class-seed gap as /graph/trace direction=in (see there) — expand class ids to
+    // their methods so a class's dependents (its methods' callers) are found.
+    const startIds = await expandClassSeeds(queriedIds);
+    let rows = await traverse(startIds, clampDepth(depth), ['calls', 'contains', 'http_calls'], 'toId', 'fromId');
+    // Drop the class's own "contains" walk back to itself — not a real dependent.
+    rows = rows.filter((r) => !queriedIds.includes(r.id));
     const services = [...new Set(rows.map((r) => r.repoName))];
     return reply.send({ symbol, services, count: rows.length, dependents: rows });
   });
 }
 
-/** Resolve a symbol argument (exact node id, or a name optionally scoped to a repo) to start-node ids. */
+/**
+ * Resolve a symbol argument to start-node ids. Accepts:
+ *  - an exact node id
+ *  - a bare name ("calculate") — matches that name anywhere (optionally repo-scoped),
+ *    which can span unrelated classes
+ *  - a "Class::member" scoped name — resolves member(s) of the named class(es) only
+ */
 async function resolveStartIds(symbol: string, repo?: string): Promise<string[]> {
   const byId = await prisma.symbolNode.findUnique({ where: { id: symbol }, select: { id: true } });
   if (byId) return [byId.id];
   const repoId = repo ? (await prisma.repository.findUnique({ where: { name: repo } }))?.id : undefined;
   if (repo && !repoId) return [];
+
+  const sepIndex = symbol.indexOf('::');
+  if (sepIndex !== -1) {
+    const className = symbol.slice(0, sepIndex);
+    const memberName = symbol.slice(sepIndex + 2);
+    const classes = await prisma.symbolNode.findMany({
+      where: { name: className, kind: 'class', ...(repoId ? { repoId } : {}) },
+      select: { id: true },
+    });
+    if (classes.length === 0) return [];
+    const containsEdges = await prisma.symbolEdge.findMany({
+      where: { kind: 'contains', fromId: { in: classes.map((c) => c.id) } },
+      select: { toId: true },
+    });
+    const members = await prisma.symbolNode.findMany({
+      where: { id: { in: containsEdges.map((e) => e.toId) }, name: memberName },
+      select: { id: true },
+      take: 25,
+    });
+    return members.map((m) => m.id);
+  }
+
   const nodes = await prisma.symbolNode.findMany({
     where: { name: symbol, ...(repoId ? { repoId } : {}) },
     select: { id: true },
     take: 25,
   });
   return nodes.map((n) => n.id);
+}
+
+/** For any class-kind id in the set, also seed with its contained method/function ids. */
+async function expandClassSeeds(startIds: string[]): Promise<string[]> {
+  const classIds = (
+    await prisma.symbolNode.findMany({
+      where: { id: { in: startIds }, kind: 'class' },
+      select: { id: true },
+    })
+  ).map((n) => n.id);
+  if (classIds.length === 0) return startIds;
+  const members = await prisma.symbolEdge.findMany({
+    where: { kind: 'contains', fromId: { in: classIds } },
+    select: { toId: true },
+  });
+  return [...new Set([...startIds, ...members.map((m) => m.toId)])];
 }
 
 /** Recursive CTE walk over symbol_edges. fromCol/toCol pick direction; kinds filters edge types. */
