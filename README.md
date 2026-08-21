@@ -214,6 +214,18 @@ kb watch <repos-dir>          # reindexes a repo when its branch/commit/working 
 `kb sync`/`kb fetch` refuse a snapshot whose embedding model/dimensions differ from the local .env
 (mixed vector spaces are unusable); `kb watch` only re-embeds files whose hash changed.
 
+## Development
+
+```bash
+pnpm build     # turbo build across all packages/apps
+pnpm test      # turbo test across all packages/apps
+pnpm dev       # turbo dev (watch mode)
+```
+
+## License
+
+MIT — see [LICENSE](./LICENSE).
+
 ## TODOs / Future Work
 
 - [x] Tree-sitter AST parsing for more accurate symbol extraction
