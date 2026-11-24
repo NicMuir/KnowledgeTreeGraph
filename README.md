@@ -183,7 +183,7 @@ Implement `EmbeddingProvider` and/or `ChatProvider` from `packages/llm/src/types
 | `EMBEDDING_DIMENSIONS` | `768` / `1536` | Must match model output (team: must match HEAD PC) |
 | `API_PORT` | `3001` | API server port |
 | `KB_API_URL` | `http://localhost:3001` | API address the CLI talks to |
-| `KB_HEAD_URL` | `http://<head-pc>:3001` | HEAD PC address for `kb sync` |
+| `KB_HEAD_URL` | — | HEAD PC address for `kb sync` (e.g. `http://<head-pc>:3001`) |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3001` | API URL for frontend |
 
 ## Team Setup: HEAD PC + Laptops
@@ -204,7 +204,7 @@ git clone <this-repo> && cd KB && ./install.sh   # deps + build + `kb` on your P
 kb serve                                         # local stack up
 kb sync <repos-dir>                              # download + restore + remap paths
 ```
-`kb sync` pulls from `KB_HEAD_URL` (default `http://<head-pc>:3001`); `kb fetch --from <url> --dir <dir>` is the same against an explicit server.
+`kb sync` pulls from `KB_HEAD_URL` (set it in `.env`; there is no default); `kb fetch --from <url> --dir <dir>` is the same against an explicit server.
 
 **Each laptop** (leave running in a spare terminal):
 ```bash

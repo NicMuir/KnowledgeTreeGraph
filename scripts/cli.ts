@@ -105,13 +105,16 @@ async function cmdIndexAll(pos: string[], flags: Record<string, string | true>):
 }
 
 const SNAP_DIR = path.join(ROOT, 'snapshots');
-const HEAD_URL = (process.env.KB_HEAD_URL ?? 'http://<head-pc>:3001').replace(/\/$/, '');
+// No built-in default: the HEAD PC's address is site-specific and belongs in .env, not in the repo.
+const HEAD_URL = (process.env.KB_HEAD_URL ?? '').replace(/\/$/, '');
 
 // `kb sync <dir>` — fetch from the team's HEAD PC without remembering its address.
 async function cmdSync(pos: string[], flags: Record<string, string | true>): Promise<void> {
   const dir = pos[0] ?? (flags.dir as string);
-  if (!dir) die(`Usage: kb sync <repos-dir> [--force]   (pulls the snapshot from ${HEAD_URL}; override with KB_HEAD_URL or --from)`);
-  await cmdFetch([], { ...flags, from: (flags.from as string) ?? HEAD_URL, dir });
+  if (!dir) die('Usage: kb sync <repos-dir> [--force]   (pulls the snapshot from KB_HEAD_URL, or --from <url>)');
+  const from = (flags.from as string) ?? HEAD_URL;
+  if (!from) die('kb sync: no HEAD PC configured — set KB_HEAD_URL in .env or pass --from <url>');
+  await cmdFetch([], { ...flags, from, dir });
 }
 
 // Dump the DB for distribution to laptops (HEAD PC). Date-named files sort chronologically.
@@ -583,7 +586,7 @@ function usage(repl = false): void {
   ${p}index-all <dir> [names,to,include] [--only a,b] [--skip a,b]   index subdirs (+auto link)
   ${p}refresh <dir> [--keep n]                                HEAD PC: pull main/master → reindex → snapshot
   ${p}snapshot [--keep 3]                                     dump the DB → snapshots/ (served at /snapshot)
-  ${p}sync <dir> [--force]                                    bootstrap/refresh from the HEAD PC (${HEAD_URL})
+  ${p}sync <dir> [--force]                                    bootstrap/refresh from the HEAD PC (${HEAD_URL || 'KB_HEAD_URL not set'})
   ${p}fetch --from http://pc:3001 --dir <dir> [--force]       same, from an explicit server
   kb watch <dir> [repo…] [--interval 5] [--dirty-interval 60]  reindex repos as their git state changes
   ${p}link                                                    rebuild cross-service HTTP call edges
@@ -600,7 +603,7 @@ function usage(repl = false): void {
   exit                                                     stop the API and quit` : `
   kb serve                                                    start the stack + interactive console`}
 
-Env: KB_API_URL (default ${API}), KB_HEAD_URL (default ${HEAD_URL}), OLLAMA_BASE_URL, DATABASE_URL.`);
+Env: KB_API_URL (default ${API}), KB_HEAD_URL (${HEAD_URL || 'not set'}), OLLAMA_BASE_URL, DATABASE_URL.`);
 }
 
 // Shared command router for both the one-shot CLI and the `kb serve` console.

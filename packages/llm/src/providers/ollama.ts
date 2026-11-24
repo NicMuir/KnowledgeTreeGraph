@@ -10,7 +10,7 @@ import type { EmbeddingProvider, ChatProvider, ChatMessage, ChatOptions } from '
 import { LlmUnavailableError } from '../types';
 
 interface OllamaConfig {
-  baseUrl: string;       // e.g. http://<head-pc>:11434
+  baseUrl: string;       // e.g. http://localhost:11434
   embeddingModel: string;
   chatModel: string;
   dimensions: number;
